@@ -1,0 +1,28 @@
+# Windows / editor artifacts
+Thumbs.db
+Desktop.ini
+~$*
+*.tmp
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# local secrets and machine-specific config (only *.example belongs in git)
+config/server.json
+config/hf_token.b64
+config/api_key
+config/*.local.env
+*.private
+
+# build and work artifacts
+.tmpsrv/
+*.bak
+*.bak2
+*.bak-*
+*.orig
+*.rej
+*.log
+*.so

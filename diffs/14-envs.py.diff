@@ -1,0 +1,22 @@
+# vllm/envs.py
+# patches: 13
+# base: upstream @pin + base/qwen38-ple-ssd.patch (shipped state afterwards)
+--- a/vllm/envs.py
++++ b/vllm/envs.py
+@@ -186,6 +186,7 @@
+     VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY: str = ""
+     VLLM_RAY_EXTRA_ENV_VARS_TO_COPY: str = ""
+     VLLM_MARLIN_USE_ATOMIC_ADD: bool = False
++    VLLM_MARLIN_REPACK_STAGED: bool = False
+     VLLM_MARLIN_INPUT_DTYPE: Literal["int8", "fp8"] | None = None
+     VLLM_HUMMING_ONLINE_QUANT_CONFIG: dict[str, Any] | None = None
+     VLLM_HUMMING_INPUT_QUANT_CONFIG: dict[str, Any] | None = None
+@@ -1513,6 +1514,8 @@
+         "VLLM_MODEL_REDIRECT_PATH", None
+     ),
+     # Whether to use atomicAdd reduce in gptq/awq marlin kernel.
++        "VLLM_MARLIN_REPACK_STAGED":
++        lambda: os.environ.get("VLLM_MARLIN_REPACK_STAGED") == "1",
+     "VLLM_MARLIN_USE_ATOMIC_ADD": lambda: (
+         os.environ.get("VLLM_MARLIN_USE_ATOMIC_ADD", "0") == "1"
+     ),

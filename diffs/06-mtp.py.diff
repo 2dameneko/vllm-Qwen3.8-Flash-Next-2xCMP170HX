@@ -1,0 +1,46 @@
+# vllm/models/qwen4_exp/nvidia/mtp.py
+# patches: 09, 14
+# base: upstream @pin + base/qwen38-ple-ssd.patch (shipped state afterwards)
+--- a/vllm/models/qwen4_exp/nvidia/mtp.py
++++ b/vllm/models/qwen4_exp/nvidia/mtp.py
+@@ -48,6 +48,7 @@
+     Qwen4ExpTextConfig,
+ )
+ 
++from . import abliteration
+ from .hyperconnection import GatedResidual, HyperConnectionConfig
+ from .low_latency_gemm import enable_qwen4_exp_low_latency_gemm
+ from .model import (
+@@ -187,6 +188,9 @@
+         self.hc_count = config.hc_count
+ 
+         self.embed_tokens = VocabParallelEmbedding(self.vocab_size, self.hidden_size)
++        # PATCH (abliteration): the draft embedding branch. Draft layers are the same
++        # Qwen4ExpDecoderLayer, so their residual writers are already covered.
++        abliteration.register(self, self.hidden_size, model_config.dtype)
+         draft_vllm_config = _make_draft_vllm_config(
+             vllm_config,
+             self.mtp_start_layer_idx,
+@@ -276,7 +280,11 @@
+             buffer[:num_rows].copy_(selected)
+ 
+     def embed_input_ids(self, input_ids: torch.Tensor) -> torch.Tensor:
+-        return self.embed_tokens(input_ids)
++        # PATCH (abliteration): the same projection for the draft - otherwise spec-decode
++        # would diverge from the target (see docs/abliteration.md, pt.5).
++        return abliteration.project_(
++            self.embed_tokens(input_ids), self._abliteration_r
++        )
+ 
+     def forward(
+         self,
+@@ -291,7 +299,8 @@
+         hidden_size = self.hidden_size
+         prev_block_output: torch.Tensor | None = None
+ 
+-        if get_pp_group().is_first_rank:
++        if intermediate_tensors is None:  # PATCH #54709: not a PP rank, but "no upstream stage"
++        #  (was: if get_pp_group().is_first_rank:)
+             assert hidden_states is not None
+             if inputs_embeds is None:
+                 assert input_ids is not None

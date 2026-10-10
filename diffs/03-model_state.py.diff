@@ -1,0 +1,43 @@
+# vllm/models/qwen4_exp/nvidia/model_state.py
+# patches: 07b
+# base: upstream @pin + base/qwen38-ple-ssd.patch (shipped state afterwards)
+--- a/vllm/models/qwen4_exp/nvidia/model_state.py
++++ b/vllm/models/qwen4_exp/nvidia/model_state.py
+@@ -48,13 +48,31 @@
+             self.ngram_eos_token_id = 0
+             return
+ 
++        # PATCH (vllm#54709): the check is on PLACEMENT, not on PP>1 itself.
++        # Here pp_group is already initialized, so the rank is known.
++        from vllm.distributed import get_pp_group
++        from vllm.distributed.utils import get_pp_indices
++
+         if vllm_config.parallel_config.pipeline_parallel_size > 1:
+-            raise RuntimeError(
+-                "N-gram PLE embedding currently requires "
+-                "pipeline_parallel_size=1 because non-first pipeline ranks do "
+-                "not receive the raw input_ids required by PLE. Please run "
+-                "with PP=1."
+-            )
++            _pp_size = vllm_config.parallel_config.pipeline_parallel_size
++            _pp_rank = get_pp_group().rank_in_group
++            _num_layers = int(config.num_hidden_layers)
++            _start, _end = get_pp_indices(_num_layers, _pp_rank, _pp_size)
++            _ple_idx = sorted(int(i) for i in config.ple_layer_ids)
++            _here = [i for i in _ple_idx if _start <= i < _end]
++            if _pp_rank == 0 and len(_here) != len(_ple_idx):
++                raise RuntimeError(
++                    f"Qwen4Exp PLE layers {sorted(set(_ple_idx) - set(_here))} "
++                    f"fall outside pipeline rank 0 (layers {_start}..{_end - 1}). "
++                    f"Give rank 0 more layers via VLLM_PP_LAYER_PARTITION, "
++                    f"or run with PP=1."
++                )
++            if _pp_rank != 0 and _here:
++                raise RuntimeError(
++                    f"Qwen4Exp PLE layers {_here} landed on pipeline rank "
++                    f"{_pp_rank} (layers {_start}..{_end - 1}), but PLE must "
++                    f"live on rank 0. Adjust VLLM_PP_LAYER_PARTITION."
++                )
+ 
+         self.ngram_context_len = int(config.ngram_size) - 1
+         if self.ngram_context_len <= 0:

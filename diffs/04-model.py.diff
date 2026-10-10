@@ -1,0 +1,65 @@
+# vllm/models/qwen4_exp/nvidia/model.py
+# patches: 14
+# base: upstream @pin + base/qwen38-ple-ssd.patch (shipped state afterwards)
+--- a/vllm/models/qwen4_exp/nvidia/model.py
++++ b/vllm/models/qwen4_exp/nvidia/model.py
+@@ -76,6 +76,7 @@
+ from vllm.v1.kv_cache_interface import MambaSpec
+ 
+ from ..config import ATTENTION_LAYER_TYPES, QSA_LAYER_TYPE, Qwen4ExpConfig
++from . import abliteration
+ from .hyperconnection import GatedResidual, HyperConnectionConfig
+ from .low_latency_gemm import enable_qwen4_exp_low_latency_gemm
+ from .ple_layer import Qwen4ExpPLELayer
+@@ -272,6 +273,10 @@
+             hc_config,
+             prefix=maybe_prefix(prefix, "mlp_hyper_connection"),
+         )
++        # PATCH (abliteration): the direction buffer is placed ON EVERY layer,
++        # so it exists exactly on the PP ranks where the layer really lives
++        # (see docs/abliteration.md, the PP section).
++        abliteration.register(self, config.hidden_size, model_config.dtype)
+ 
+     def forward(
+         self,
+@@ -322,12 +327,17 @@
+             )
+         else:
+             raise ValueError("Invalid layer_type")
++        # PATCH (abliteration): o_proj / out_proj write straight into the residual.
++        abliteration.project_(attn_out, self._abliteration_r)
+ 
+         mlp_hc = self.mlp_hyper_connection
+         hidden_states, block_input, injection = mlp_hc.combine_and_mix(
+             hidden_states, attn_out, injection
+         )
+         mlp_out = self.mlp(block_input)
++        # PATCH (abliteration): the routed+shared expert sum before it is written
++        # residual - the projection of the sum equals patching every down_proj.
++        abliteration.project_(mlp_out, self._abliteration_r)
+         return hidden_states, mlp_out, injection
+ 
+ 
+@@ -402,6 +412,8 @@
+             )
+         )
+         self.embed_tokens = VocabParallelEmbedding(self.vocab_size, config.hidden_size)
++        # PATCH (abliteration): buffer on the model itself - for text embeddings.
++        abliteration.register(self, config.hidden_size, vllm_config.model_config.dtype)
+ 
+         def get_layer(prefix: str) -> Qwen4ExpDecoderLayer:
+             layer_idx = extract_layer_index(prefix)
+@@ -463,7 +475,12 @@
+             self._mtp_hidden_buffer = None
+ 
+     def embed_input_ids(self, input_ids: torch.Tensor) -> torch.Tensor:
+-        return self.embed_tokens(input_ids)
++        # PATCH (abliteration): embed_tokens rows write into the residual. The projection
++        # runs BEFORE the multimodal merge (images are left untouched)
++        # and BEFORE the repeat under hc_count - that is, along hidden_size.
++        return abliteration.project_(
++            self.embed_tokens(input_ids), self._abliteration_r
++        )
+ 
+     @staticmethod
+     def _start_layer_ple_prefetch(

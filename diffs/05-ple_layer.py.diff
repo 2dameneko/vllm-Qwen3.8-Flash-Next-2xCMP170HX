@@ -1,0 +1,34 @@
+# vllm/models/qwen4_exp/nvidia/ple_layer.py
+# patches: 14
+# base: upstream @pin + base/qwen38-ple-ssd.patch (shipped state afterwards)
+--- a/vllm/models/qwen4_exp/nvidia/ple_layer.py
++++ b/vllm/models/qwen4_exp/nvidia/ple_layer.py
+@@ -26,6 +26,7 @@
+     PleShortConvAttentionMetadata,
+ )
+ 
++from . import abliteration
+ from .ngram_embedding import Qwen4ExpNGramEmbedding
+ from .ops.ple import ple_conv, ple_gate
+ 
+@@ -113,6 +114,10 @@
+             prefix=f"{prefix}.kv_proj",
+             disable_tp=True,
+         )
++        # PATCH (abliteration): buffer on the PLE layer itself. The value projection goes
++        # forward BEFORE the gate/norm: the norm is non-linear, so patching the weight
++        # value_proj acts exactly there (docs/abliteration.md, pt.3).
++        abliteration.register(self, self.hidden_size, model_config.dtype)
+         norm_args = (
+             self.hc_hidden_size,
+             config.rms_norm_eps,
+@@ -414,6 +419,9 @@
+         embeddings = self._dequantize_embeddings(embeddings, hidden_states.dtype)
+         kv, _ = self.kv_proj(embeddings)
+         key, value = kv.split(self.kv_proj.output_sizes, dim=-1)
++        # PATCH (abliteration): part of value writes into the residual through the gate.
++        # value is a non-contiguous slice, project_ accounts for that.
++        abliteration.project_(value, self._abliteration_r)
+         gated_output, conv_input = ple_gate(
+             key,
+             value,

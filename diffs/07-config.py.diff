@@ -1,0 +1,25 @@
+# vllm/model_executor/models/config.py
+# patches: 07
+# base: upstream @pin + base/qwen38-ple-ssd.patch (shipped state afterwards)
+--- a/vllm/model_executor/models/config.py
++++ b/vllm/model_executor/models/config.py
+@@ -876,12 +876,13 @@
+             )
+         # Checked again in Qwen4ExpModelState; rejecting it here keeps the
+         # engine from loading weights first.
+-        if text_config.ple_layer_ids and parallel_config.pipeline_parallel_size > 1:
+-            raise NotImplementedError(
+-                "Qwen4Exp N-gram PLE embedding requires pipeline_parallel_size=1 "
+-                "because non-first pipeline ranks do not receive the raw input_ids "
+-                "it needs. Please run with PP=1."
+-            )
++        # PATCH (vllm#54709): the blanket PP>1 ban is lifted - PLE is needed not
++        # all stages, but only the one that actually holds its layer.
++        #
++        # The placement check cannot live here: ParallelConfig
++        # is process-independent and knows no rank of its own (verified - it has
++        # pipeline_parallel_rank attribute). The check lives in
++        # Qwen4ExpModelState, where pp_group is already initialized.
+         multimodal_config = vllm_config.model_config.multimodal_config
+         if multimodal_config is not None and multimodal_config.language_model_only:
+             _strip_qwen4_exp_mrope(vllm_config.model_config)

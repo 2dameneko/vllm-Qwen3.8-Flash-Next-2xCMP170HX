@@ -1,0 +1,19 @@
+# vllm/model_executor/model_loader/utils.py
+# patches: 13b
+# base: upstream @pin + base/qwen38-ple-ssd.patch (shipped state afterwards)
+--- a/vllm/model_executor/model_loader/utils.py
++++ b/vllm/model_executor/model_loader/utils.py
+@@ -142,6 +142,13 @@
+             # Repacking transients above can leave large amounts of memory in
+             # the caching allocator, which starves the OS on UMA devices.
+             release_device_memory_under_pressure(target_device)
++            # Staged repack: force GC between layers to free CPU RAM
++            # (critical for systems with 32GB RAM loading 176GB models).
++            if envs.VLLM_MARLIN_REPACK_STAGED:
++                import gc
++                gc.collect()
++                if hasattr(torch.cuda, 'empty_cache'):
++                    torch.cuda.empty_cache()
+ 
+     # Initialize post-load attention weights for any attention layer and MM
+     # encoder. NOTE: Happens after other modules so we can easily decompress

@@ -1,0 +1,41 @@
+# vllm/v1/worker/utils.py
+# patches: 08
+# base: upstream @pin + base/qwen38-ple-ssd.patch (shipped state afterwards)
+--- a/vllm/v1/worker/utils.py
++++ b/vllm/v1/worker/utils.py
+@@ -423,11 +423,30 @@
+     kv_caches: dict[str, torch.Tensor] = {}
+     for tensor in kv_cache_config.kv_cache_tensors:
+         layer_name = tensor.layers[0]
+-        group_id, group = next(
+-            (group_id, group)
+-            for group_id, group in enumerate(kv_cache_config.kv_cache_groups)
+-            if layer_name in group.layer_names
+-        )
++        # PATCH (vllm#54709 + diagnostics): the PLE layer shows up in
++        # kv_cache_tensors, but belongs to no kv_cache_group - it has
++        # no KV cache, which is normal. With PP=1 the lists of layers and groups
++        # matched, with PP>1 the PLE tensor stayed "group-less" and next()
++        # crashed with StopIteration.
++        #
++        # A tensor whose layer is in no group contributes nothing to the
++        # still contributes nothing (its strides come from group.kv_cache_spec),
++        # so skipping it is the correct thing to do.
++        _found = None
++        for _gid, _g in enumerate(kv_cache_config.kv_cache_groups):
++            if layer_name in _g.layer_names:
++                _found = (_gid, _g)
++                break
++        if _found is None:
++            # The layer has no KV cache (e.g. PLE) - its tensor is created,
++            # but it belongs to no group. On allocation it contributes nothing
++            # gives: its strides are derived from group.kv_cache_spec.
++            logger.debug(
++                "KV: skip tensor for layer %r - not in any kv_cache_group",
++                layer_name,
++            )
++            continue
++        group_id, group = _found
+         spec = group.kv_cache_spec
+         if isinstance(spec, UniformTypeKVCacheSpecs):
+             spec = spec.kv_cache_specs[layer_name]

@@ -1,0 +1,101 @@
+/srv/llm/src/flashnext-cmp170hx:
+total 56
+drwxr-xr-x 8 root root  4096 Sep 29 07:03 .
+drwxr-xr-x 8 root root  4096 Oct  1 10:56 ..
+-rw-r--r-- 1 root root   138 Sep 29 07:03 .gitattributes
+-rw-r--r-- 1 root root    87 Sep 29 07:03 .gitignore
+-rw-r--r-- 1 root root 11357 Sep 29 07:03 LICENSE
+-rw-r--r-- 1 root root  2471 Sep 29 07:03 README.md
+drwxr-xr-x 2 root root  4096 Sep 29 07:03 benchmarks
+drwxr-xr-x 2 root root  4096 Sep 29 07:03 docs
+drwxr-xr-x 2 root root  4096 Sep 29 07:03 patches
+drwxr-xr-x 2 root root  4096 Sep 29 07:03 requirements
+drwxr-xr-x 4 root root  4096 Sep 29 07:03 results
+drwxr-xr-x 2 root root  4096 Sep 29 07:03 scripts
+
+/srv/llm/src/flashnext-cmp170hx/benchmarks:
+total 24
+drwxr-xr-x 2 root root 4096 Sep 29 07:03 .
+drwxr-xr-x 8 root root 4096 Sep 29 07:03 ..
+-rw-r--r-- 1 root root 1502 Sep 29 07:03 bench_prefill.py
+-rw-r--r-- 1 root root 4274 Sep 29 07:03 bench_server.py
+-rw-r--r-- 1 root root 3354 Sep 29 07:03 verify_server.py
+
+/srv/llm/src/flashnext-cmp170hx/docs:
+total 32
+drwxr-xr-x 2 root root 4096 Sep 29 07:03 .
+drwxr-xr-x 8 root root 4096 Sep 29 07:03 ..
+-rw-r--r-- 1 root root 4899 Sep 29 07:03 GUIDE.md
+-rw-r--r-- 1 root root 4375 Sep 29 07:03 IMPLEMENTATION.md
+-rw-r--r-- 1 root root 1012 Sep 29 07:03 PERFORMANCE.md
+-rw-r--r-- 1 root root 2328 Sep 29 07:03 RESULTS.md
+
+/srv/llm/src/flashnext-cmp170hx/patches:
+total 64
+drwxr-xr-x 2 root root  4096 Sep 29 07:03 .
+drwxr-xr-x 8 root root  4096 Sep 29 07:03 ..
+-rw-r--r-- 1 root root 55767 Sep 29 07:03 qwen38-ple-ssd.patch
+
+/srv/llm/src/flashnext-cmp170hx/requirements:
+total 20
+drwxr-xr-x 2 root root 4096 Sep 29 07:03 .
+drwxr-xr-x 8 root root 4096 Sep 29 07:03 ..
+-rw-r--r-- 1 root root 4608 Sep 29 07:03 runtime-snapshot.txt
+-rw-r--r-- 1 root root  249 Sep 29 07:03 tested-constraints.txt
+
+/srv/llm/src/flashnext-cmp170hx/results:
+total 28
+drwxr-xr-x 4 root root 4096 Sep 29 07:03 .
+drwxr-xr-x 8 root root 4096 Sep 29 07:03 ..
+-rw-r--r-- 1 root root  776 Sep 29 07:03 README.md
+-rw-r--r-- 1 root root 1731 Sep 29 07:03 manifest.json
+drwxr-xr-x 3 root root 4096 Sep 29 07:03 pass2
+-rw-r--r-- 1 root root  267 Sep 29 07:03 publication-checks.json
+drwxr-xr-x 2 root root 4096 Sep 29 07:03 tests
+
+/srv/llm/src/flashnext-cmp170hx/results/pass2:
+total 176
+drwxr-xr-x 3 root root  4096 Sep 29 07:03 .
+drwxr-xr-x 4 root root  4096 Sep 29 07:03 ..
+-rw-r--r-- 1 root root 22791 Sep 29 07:03 final-mixed.json
+-rw-r--r-- 1 root root 71196 Sep 29 07:03 final-native-aio-bench.json
+-rw-r--r-- 1 root root 48367 Sep 29 07:03 final-native-aio-long-bench.json
+-rw-r--r-- 1 root root  4205 Sep 29 07:03 final-native-aio-prefill.json
+-rw-r--r-- 1 root root  9120 Sep 29 07:03 final-native-aio-smoke.json
+drwxr-xr-x 2 root root  4096 Sep 29 07:03 profiles
+
+/srv/llm/src/flashnext-cmp170hx/results/pass2/profiles:
+total 780
+drwxr-xr-x 2 root root   4096 Sep 29 07:03 .
+drwxr-xr-x 3 root root   4096 Sep 29 07:03 ..
+-rw-r--r-- 1 root root   1724 Sep 29 07:03 selected-pp-gpu.txt
+-rw-r--r-- 1 root root   2108 Sep 29 07:03 selected-pp-requests.json
+-rw-r--r-- 1 root root  21523 Sep 29 07:03 selected-pp-stages.json
+-rw-r--r-- 1 root root   2690 Sep 29 07:03 selected-tg1-gpu.txt
+-rw-r--r-- 1 root root   6810 Sep 29 07:03 selected-tg1-requests.json
+-rw-r--r-- 1 root root 579114 Sep 29 07:03 selected-tg1-stages.json
+-rw-r--r-- 1 root root   1341 Sep 29 07:03 selected-tg8-gpu.txt
+-rw-r--r-- 1 root root  12116 Sep 29 07:03 selected-tg8-requests.json
+-rw-r--r-- 1 root root 146427 Sep 29 07:03 selected-tg8-stages.json
+
+/srv/llm/src/flashnext-cmp170hx/results/tests:
+total 28
+drwxr-xr-x 2 root root 4096 Sep 29 07:03 .
+drwxr-xr-x 4 root root 4096 Sep 29 07:03 ..
+-rw-r--r-- 1 root root   46 Sep 29 07:03 lint-final.log
+-rw-r--r-- 1 root root 1211 Sep 29 07:03 test-breakable-full.log
+-rw-r--r-- 1 root root  567 Sep 29 07:03 test-loader-dispatch.log
+-rw-r--r-- 1 root root  580 Sep 29 07:03 test-quant.log
+-rw-r--r-- 1 root root  568 Sep 29 07:03 test-ssd-native-prefetch.log
+
+/srv/llm/src/flashnext-cmp170hx/scripts:
+total 36
+drwxr-xr-x 2 root root 4096 Sep 29 07:03 .
+drwxr-xr-x 8 root root 4096 Sep 29 07:03 ..
+-rw-r--r-- 1 root root  543 Sep 29 07:03 apply-patch.sh
+-rw-r--r-- 1 root root  428 Sep 29 07:03 build-ple-io.sh
+-rw-r--r-- 1 root root  580 Sep 29 07:03 common.sh
+-rw-r--r-- 1 root root  431 Sep 29 07:03 download-model.sh
+-rw-r--r-- 1 root root  936 Sep 29 07:03 install-runtime.sh
+-rw-r--r-- 1 root root 2080 Sep 29 07:03 serve.sh
+-rw-r--r-- 1 root root  612 Sep 29 07:03 start.sh

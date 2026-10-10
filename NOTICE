@@ -1,0 +1,48 @@
+NOTICE - third-party components in this package
+
+This package is Apache-2.0 (see LICENSE). It stands on the work of others; the
+parts that are not ours are listed here with their origin and licence.
+
+1. vLLM
+   vllm-project/vllm, commit a5a30471ff2bb7f0824f2da10e358af98d304472
+   Apache-2.0. Not redistributed here: the build starts from your own checkout
+   of that commit. The diffs and the overlay apply on top of it.
+
+2. The recipe "qwen38-ple-ssd.patch"
+   iIIusi0n, https://github.com/iIIusi0n/qwen3.8-flash-next-cmp170hx
+   Apache-2.0. Shipped verbatim in base/ together with its LICENSE
+   (base/recipe-LICENSE), its README (base/README-recipe.md) and its file
+   listing. sha256 of the patch:
+   09c4e13fbd2b77169a7f8cb28d36242cc6e3916fe9c5a3c25d8e90101a38ccb0
+
+3. Pipeline-parallel edits for PLE-style models
+   Based on vLLM pull request #54709 (reported there by @hackxixi, who ran eight
+   CMP 170HX cards). Apache-2.0. Adapted in patches 07, 07b, 08, 09.
+
+4. Runtime abliteration module
+   DominikBucko, https://github.com/DominikBucko/qwen38-flash-next-2x3090
+   (runtime/vllm-overlay), Apache-2.0. Ported in patches/14_abliteration.py.
+   The refusal direction itself comes from orcarouter/Qwen3.8-Flash-Next-Uncensored
+   (Apache-2.0) and implements Arditi et al., 2024, "Refusal in Language Models
+   Is Mediated by a Single Direction". The vector is NOT redistributed here.
+
+5. Scheduler/prefix-cache advice
+   wtdcode/vllm-backport: the --prefix-match-unit flag used by the profile.
+   Apache-2.0.
+
+6. Model weights (not shipped)
+   Qwen/Qwen3.8-Flash-Next (Qwen Community License) ->
+   orcarouter/Qwen3.8-Flash-Next-Uncensored (Apache-2.0, abliterated) ->
+   AutoRound quantization -> cyankiwi/Qwen3.8-Flash-Next-AWQ-INT4 (the
+   checkpoint this build serves). Each carries its own licence; nothing from it
+   is included in this package.
+
+7. Software versions
+   The pinned versions in README.md, base/tested-constraints.txt and
+   manifest/pip-freeze.txt are the packages of the engine venv, each under its
+   own licence (torch, triton, transformers, flashinfer, instanttensor,
+   fastsafetensors, and the rest).
+
+Everything else - the patches 01..14 in patches/, the launcher and profile in
+serve/, the documentation and the scripts of this package - is ours and is
+contributed under Apache-2.0.

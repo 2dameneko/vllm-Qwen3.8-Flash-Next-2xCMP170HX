@@ -1,0 +1,18 @@
+# vllm/model_executor/layers/quantization/moe_wna16.py
+# patches: 12b
+# base: upstream @pin + base/qwen38-ple-ssd.patch (shipped state afterwards)
+--- a/vllm/model_executor/layers/quantization/moe_wna16.py
++++ b/vllm/model_executor/layers/quantization/moe_wna16.py
+@@ -122,7 +122,11 @@
+         lm_head_quantized = cls.get_from_keys_or(config, ["lm_head"], default=False)
+         if linear_quant_method == "gptq":
+             has_zp = not cls.get_from_keys(config, ["sym"])
+-            modules_to_not_convert = []
++            # PATCH: AutoRound-GPTQ checkpoints quantize the experts only;
++            # without the attention/norm list they would go to AutoGPTQ and fail.
++            modules_to_not_convert = cls.get_from_keys_or(
++                config, ["modules_to_not_convert"], None
++            )
+         elif linear_quant_method in ("awq", "awq_marlin"):
+             has_zp = cls.get_from_keys(config, ["zero_point"])
+             modules_to_not_convert = cls.get_from_keys_or(
