@@ -1,7 +1,7 @@
 # INSTALL.md - build from upstream to a running engine
 
 Everything below is one pass on a fresh machine. The result is a vLLM tree whose
-fifteen patched files match `manifest/files.sha256` byte for byte, served by
+seventeen patched files match `manifest/files.sha256` byte for byte, served by
 `serve/serve.sh`.
 
 ## 0. Prerequisites
@@ -64,8 +64,8 @@ bash patches/apply.sh /srv/llm/src/vllm-a5a30471ff2bb7f0824f2da10e358af98d304472
 # ... or, identical result and no scripts: cp -r overlay/. <tree>/
 ```
 
-Each script prints one line per file (`patched`, `already`, `ANCHOR?`). Twenty
-scripts, 40 edits, fifteen files. If a script reports `ANCHOR?`, the tree is not
+Each script prints one line per file (`patched`, `already`, `ANCHOR?`). Twenty-one
+scripts, 72 edits, seventeen files. If a script reports `ANCHOR?`, the tree is not
 the pinned revision or is not clean - do not "fix" it by hand, compare against
 `overlay/` instead.
 
@@ -76,11 +76,12 @@ cd /path/to/release
 bash verify.sh /srv/llm/src/vllm-a5a30471ff2bb7f0824f2da10e358af98d304472
 ```
 
-`verify.sh` checks the fifteen files against `manifest/files.sha256`, compiles
+`verify.sh` checks the seventeen files against `manifest/files.sha256`, compiles
 the patched python files, looks for leftovers from other tools
 (`*.orig`, `*.rej`, i.e. a recipe patch that did not apply cleanly) and greps for
 the marker of every patch in the set - for example `VLLM_PLE_NONPLE_LOADER` in
-`ple_ssd.py` and `abliteration.register` in `abliteration.py`.
+`ple_ssd.py`, `abliteration.register` in `abliteration.py` and `self._pth_caches` in
+`nvidia/qsa.py`.
 
 ## 5. Model
 
@@ -136,13 +137,24 @@ belongs to the Apache-2.0 release
 `=== refusal abliteration (patch 14): ON`. Unset means off, and with it off no
 code runs and no weight or activation is touched.
 
+## INT8 KV cache (patch 16)
+
+The shipped profile sets `KV_DTYPE=int8_per_token_head`: the KV cache is INT8 with
+one scale per (token, head), which more than doubles the pool at the same VRAM
+fraction (744 431 -> 1 352 663 tokens at ctx 262 144) and costs 1.5 % of decode
+(`BENCHMARKS.md`). It is the only KV mode that is worth its price on `sm_80`:
+FP8 KV needs an `fp8e4b15` emulation there and loses about a third of decode.
+
+Without patch 16 the engine refuses the value at startup
+(`TROUBLESHOOTING.md`); comment the line out to run BF16 KV instead.
+
 ## What "done" looks like
 
 ```
-manifest/files.sha256 ......... 15/15 OK
+manifest/files.sha256 ......... 17/17 OK
 /health ....................... 200 after 150-200 s
 banner ........................ PLE on SSD, layer split 26,22, loader instanttensor
-GPU KV cache size ............. ~744 000 tokens at ctx 262144 and GPU_MEMORY=0.90
+GPU KV cache size ............. ~1 352 000 tokens at ctx 262144, GPU_MEMORY=0.90, INT8 KV
 ```
 
 The acceptance run used here (`BENCHMARKS.md`, "End-to-end acceptance"): a

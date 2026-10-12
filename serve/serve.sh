@@ -124,7 +124,8 @@ fi
 # --- optional switches --------------------------------------------------------
 keyargs=()
 [ -n "$API_KEY" ] && keyargs=(--api-key "$API_KEY")
-# KV cache dtype: unset = bfloat16; fp8_e4m3 halves the bytes per token.
+# KV cache dtype: unset = bfloat16; int8_per_token_head (patch 16) halves the
+# bytes per token and more, fp8_e4m3 needs an emulation on sm_80.
 kvargs=()
 [ -n "${KV_DTYPE:-}" ] && kvargs=(--kv-cache-dtype "$KV_DTYPE")
 # Prefix cache: keys are matched in units of the mamba block, so with MTP nothing
@@ -179,6 +180,11 @@ if [ -n "${VLLM_PLE_NONPLE_LOADER:-}" ]; then
   echo "=== non-PLE weight loader: $VLLM_PLE_NONPLE_LOADER (patch 06)"
 else
   echo "=== non-PLE weight loader: safetensors/mmap (default)"
+fi
+if [ -n "${KV_DTYPE:-}" ]; then
+  echo "=== KV cache dtype: $KV_DTYPE (per-token-head modes need patch 16)"
+else
+  echo "=== KV cache dtype: bfloat16 (engine default)"
 fi
 [ -n "$API_KEY" ] && echo "=== API key: enabled (Bearer required on /v1)" || echo "=== API key: not set (open access)"
 [ -n "${PREFIX_MATCH_UNIT:-}" ] && echo "=== prefix-match-unit: $PREFIX_MATCH_UNIT" || echo "=== prefix-match-unit: default (one mamba block)"

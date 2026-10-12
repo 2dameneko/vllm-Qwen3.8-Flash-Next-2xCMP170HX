@@ -2,14 +2,14 @@
 
 | file | what it is |
 |---|---|
-| `files.sha256` | sha256 of the **fifteen files this release changes**, paths relative to the vLLM tree root. This is the file `verify.sh` and `sha256sum -c` use |
+| `files.sha256` | sha256 of the **seventeen files this release changes**, paths relative to the vLLM tree root. This is the file `verify.sh` and `sha256sum -c` use |
 | `tree.sha256` | sha256 of **every file of the built tree** on the reference machine (10 602 files), generated with `LC_ALL=C find . -type f -print0 \| LC_ALL=C sort -z \| xargs -0 sha256sum` from the tree root |
 | `pip-freeze.txt` | the engine venv's package set (`python -m pip freeze`), 89 lines; the versions that matter are also in `../base/tested-constraints.txt` and `../README.md` |
 
 ## Use
 
 ```bash
-# the fifteen patched files, from the tree root
+# the seventeen patched files, from the tree root
 cd /path/to/vllm-a5a30471ff2bb7f0824f2da10e358af98d304472
 sha256sum -c /path/to/release/manifest/files.sha256
 
@@ -28,7 +28,7 @@ files; compare the specific paths you care about rather than the whole list.
 
 ## What the hashes are worth
 
-* The fifteen files in `files.sha256` are the ones that decide behaviour: they
+* The seventeen files in `files.sha256` are the ones that decide behaviour: they
   are what `patches/` produce and what `overlay/` contains.
 * `tree.sha256` also pins the pieces this package does *not* ship: the CUDA
   extensions (`vllm/_C*.abi3.so`, the flash-attention libraries) and the model

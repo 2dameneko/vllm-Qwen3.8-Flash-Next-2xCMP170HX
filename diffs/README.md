@@ -22,6 +22,8 @@ describe the same change.
 | `13-model_loader-utils.py.diff` | `vllm/model_executor/model_loader/utils.py` | 13b |
 | `14-envs.py.diff` | `vllm/envs.py` | 13 |
 | `15-abliteration.py.diff` | `vllm/models/qwen4_exp/nvidia/abliteration.py` | 14 (a new file, so the diff is the whole file) |
+| `16-nvidia-qsa.py.diff` | `vllm/models/qwen4_exp/nvidia/qsa.py` | 16 |
+| `17-ops-qsa.py.diff` | `vllm/models/qwen4_exp/nvidia/ops/qsa.py` | 16 |
 
 Apply one of them to the clean base:
 
@@ -39,5 +41,5 @@ Two caveats:
 * The diffs cover the tree only. The launcher and the profile are shipped ready
   to use in `serve/` (see `PATCHES.md`, "Launcher and profile").
 
-`overlay/` is the alternative to both: unpack it over the tree and the fifteen
+`overlay/` is the alternative to both: unpack it over the tree and the seventeen
 files are byte-identical to the shipped ones (`manifest/files.sha256`).

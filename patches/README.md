@@ -1,6 +1,6 @@
 # patches/ - what this directory changes
 
-Twenty scripts, applied in the order listed by `apply.sh`. Each one is a small
+Twenty-one scripts, applied in the order listed by `apply.sh`. Each one is a small
 idempotent text edit: `install | check | remove`, a `<file>.bak-<patch>` copy
 next to every file it touches, and an exact anchor - if the anchor is missing the
 script says so and changes nothing. Nothing here compiles, downloads or runs
@@ -44,16 +44,18 @@ came from) and `../diffs/` for the resulting change as a unified diff.
   back.
 * `05b..05d` are the three files of one logical change, and so are
   `07`/`07b` and `13`/`13b`; the numbering keeps the apply order readable rather
-  than inventing a patch count.
+  than inventing a patch count. `15` is deliberately unused: it was an FP8 KV
+  cache for the same QSA path, dropped in favour of `16` because Triton on
+  `sm_80` has no `fp8e4nv` (see `../BENCHMARKS.md`).
 
 ## Result
 
-After `apply.sh` the fifteen files it touches are byte-identical to the tree this
+After `apply.sh` the seventeen files it touches are byte-identical to the tree this
 package was built from:
 
 ```bash
 # from the release root, on the tree you just patched
-sha256sum -c manifest/files.sha256      # 15 files, all OK
+sha256sum -c manifest/files.sha256      # 17 files, all OK
 ```
 
 The same result without running the scripts: unpack `overlay/` over the tree.

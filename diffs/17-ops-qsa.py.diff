@@ -1,0 +1,251 @@
+# vllm/models/qwen4_exp/nvidia/ops/qsa.py
+# patches: 16
+# base: upstream @pin + base/qwen38-ple-ssd.patch (shipped state afterwards)
+--- a/vllm/models/qwen4_exp/nvidia/ops/qsa.py
++++ b/vllm/models/qwen4_exp/nvidia/ops/qsa.py
+@@ -42,6 +42,8 @@
+     softmax_scale,
+     output_scale,
+     output_gate_ptr,
++    k_scale_ptr,
++    v_scale_ptr,
+     stride_q_row,
+     stride_q_head,
+     stride_k_block,
+@@ -50,6 +52,9 @@
+     stride_v_block,
+     stride_v_token,
+     stride_v_head,
++    stride_s_block,
++    stride_s_token,
++    stride_s_head,
+     stride_indices_row,
+     stride_table_req,
+     stride_output_row,
+@@ -70,6 +75,7 @@
+     BLOCK_M: tl.constexpr,
+     BLOCK_N: tl.constexpr,
+     IS_FP8: tl.constexpr,
++    QUANT: tl.constexpr,
+ ) -> None:
+     row = tl.program_id(0)
+     kv_head = tl.program_id(1)
+@@ -132,29 +138,61 @@
+         valid &= (physical_page >= 0) & (physical_page < num_cache_blocks)
+         # physical_page * block stride can overflow int32 for large caches.
+         safe_page = tl.maximum(physical_page, 0).to(tl.int64)
+-        keys = tl.load(
+-            k_cache_ptr
+-            + safe_page[None, :] * stride_k_block
+-            + page_offset[None, :] * stride_k_token
+-            + kv_head * stride_k_head
+-            + dim_offsets[:, None],
+-            mask=valid[None, :],
+-            other=0.0,
+-        )
+-        values = tl.load(
+-            v_cache_ptr
+-            + safe_page[:, None] * stride_v_block
+-            + page_offset[:, None] * stride_v_token
+-            + kv_head * stride_v_head
+-            + dim_offsets[None, :],
+-            mask=valid[:, None],
+-            other=0.0,
+-        )
+-        if IS_FP8:
+-            # e4m3 -> Q dtype is exact; keep the QK dot in Q's dtype (fp8 QK
+-            # measured slower here and less accurate).
+-            keys = keys.to(query.dtype)
++        if QUANT:
++            # PATCH #16 (kv_int8_qsa): per-(token, head) int8/fp8 cache. Exact
++            # int8/fp8 -> BF16 widening (native on sm80), K scale applied to the
++            # scores and V scale to the probabilities (both per selected token).
++            keys = tl.load(
++                k_cache_ptr
++                + safe_page[None, :] * stride_k_block
++                + page_offset[None, :] * stride_k_token
++                + kv_head * stride_k_head
++                + dim_offsets[:, None],
++                mask=valid[None, :],
++                other=0,
++            ).to(query.dtype)
++            values = tl.load(
++                v_cache_ptr
++                + safe_page[:, None] * stride_v_block
++                + page_offset[:, None] * stride_v_token
++                + kv_head * stride_v_head
++                + dim_offsets[None, :],
++                mask=valid[:, None],
++                other=0,
++            ).to(query.dtype)
++            scale_offsets = (
++                safe_page * stride_s_block
++                + page_offset * stride_s_token
++                + kv_head * stride_s_head
++            )
++            key_scale = tl.load(k_scale_ptr + scale_offsets, mask=valid, other=0.0)
++            value_scale = tl.load(v_scale_ptr + scale_offsets, mask=valid, other=0.0)
++        else:
++            keys = tl.load(
++                k_cache_ptr
++                + safe_page[None, :] * stride_k_block
++                + page_offset[None, :] * stride_k_token
++                + kv_head * stride_k_head
++                + dim_offsets[:, None],
++                mask=valid[None, :],
++                other=0.0,
++            )
++            values = tl.load(
++                v_cache_ptr
++                + safe_page[:, None] * stride_v_block
++                + page_offset[:, None] * stride_v_token
++                + kv_head * stride_v_head
++                + dim_offsets[None, :],
++                mask=valid[:, None],
++                other=0.0,
++            )
++            if IS_FP8:
++                # e4m3 -> Q dtype is exact; keep the QK dot in Q's dtype (fp8 QK
++                # measured slower here and less accurate).
++                keys = keys.to(query.dtype)
+         scores = tl.dot(query, keys)
++        if QUANT:
++            scores *= key_scale[None, :]
+         # Scaling scores avoids re-quantizing a scaled query to BF16; for fp8
+         # caches the K dequant scale is already folded into softmax_scale on the
+         # host.
+@@ -165,13 +203,17 @@
+         probabilities = tl.where(
+             valid[None, :], tl.math.exp2(scores - next_max[:, None]), 0.0
+         )
+-        if IS_FP8:
+-            # Dequant V to fp16 (not bf16) for the PV dot: P <= 1 (online
+-            # softmax) so fp16 has the range, its wider mantissa is more
+-            # accurate, and the fp8->fp16 upcast with an fp16 PV dot is faster.
+-            values = values.to(tl.float16)
++        if QUANT:
++            weighted = (probabilities * value_scale[None, :]).to(values.dtype)
++        else:
++            if IS_FP8:
++                # Dequant V to fp16 (not bf16) for the PV dot: P <= 1 (online
++                # softmax) so fp16 has the range, its wider mantissa is more
++                # accurate, and the fp8->fp16 upcast with an fp16 PV dot is faster.
++                values = values.to(tl.float16)
++            weighted = probabilities.to(values.dtype)
+         accumulator = tl.dot(
+-            probabilities.to(values.dtype),
++            weighted,
+             values,
+             acc=accumulator * alpha[:, None],
+         )
+@@ -636,8 +678,22 @@
+     assert head_dim >= 16 and (head_dim & (head_dim - 1)) == 0
+     assert q.dtype == torch.bfloat16
+     assert k_cache.dtype == v_cache.dtype
++    # PATCH #16 (kv_int8_qsa): k_scale/v_scale are the per-(token, head) float32
++    # scale caches for the int8/fp8-per-token-head mode, or host floats/None for
++    # the legacy per-tensor path.
++    quant = isinstance(k_scale, torch.Tensor)
+     is_fp8 = k_cache.dtype == torch.float8_e4m3fn
+-    if is_fp8:
++    if quant:
++        assert isinstance(v_scale, torch.Tensor)
++        assert k_cache.dtype in (torch.int8, torch.float8_e4m3fn)
++        assert (
++            k_scale.shape == v_scale.shape == k_cache.shape[:3]
++            and k_scale.dtype == torch.float32
++        )
++        # The per-token K scale is applied in-kernel; keep unit host scales.
++        softmax_scale = head_dim**-0.5
++        output_scale = 1.0
++    elif is_fp8:
+         assert k_scale is not None and v_scale is not None
+         # Host pre-multiply: fold the K dequant scale into the attention scale
+         # and pass V's dequant scale as the kernel's output scale.
+@@ -704,6 +760,8 @@
+         softmax_scale,
+         output_scale,
+         output_gate_view,
++        k_scale if quant else out,
++        v_scale if quant else out,
+         q.stride(0),
+         q.stride(1),
+         k_cache.stride(0),
+@@ -712,6 +770,9 @@
+         v_cache.stride(0),
+         v_cache.stride(1),
+         v_cache.stride(2),
++        k_scale.stride(0) if quant else 0,
++        k_scale.stride(1) if quant else 0,
++        k_scale.stride(2) if quant else 0,
+         logical_indices.stride(0),
+         block_table.stride(0),
+         out.stride(0),
+@@ -732,6 +793,7 @@
+         BLOCK_M=block_m,
+         BLOCK_N=block_n,
+         IS_FP8=is_fp8,
++        QUANT=quant,
+         num_warps=partial_warps,
+         num_stages=2,
+     )
+@@ -768,9 +830,14 @@
+     """Compile every production-reachable split-K/merge specialization."""
+     head_dim = kv_cache.shape[-1] // 2
+     key_cache, value_cache = kv_cache.transpose(1, 2).split(head_dim, dim=-1)
+-    # An fp8 cache is allocated as uint8 and viewed as e4m3 at attention time.
++    # An fp8 cache is allocated as uint8 and viewed as e4m3 at attention time;
++    # a per-token-head int8 cache is stored as int8 (PATCH #16).
+     is_fp8 = kv_cache.dtype == torch.uint8
+-    cache_dtype = torch.float8_e4m3fn if is_fp8 else key_cache.dtype
++    quant = kv_cache.dtype == torch.int8
++    if quant:
++        cache_dtype = torch.int8
++    else:
++        cache_dtype = torch.float8_e4m3fn if is_fp8 else key_cache.dtype
+     num_kv_heads = key_cache.shape[2]
+     group_size = num_query_heads // num_kv_heads
+     block_m = triton.next_power_of_2(group_size)
+@@ -801,6 +868,15 @@
+         cache_dtype,
+         shape=tuple(value_cache.shape),
+         strides=tuple(value_cache.stride()),
++    )
++    # PATCH #16: per-(token, head) float32 scale cache for the quantized mode.
++    scale_num_blocks = key_cache.shape[0]
++    scale_block = key_cache.shape[1]
++    scale_heads = key_cache.shape[2]
++    scale_ptr = TritonWarmupTensor(
++        torch.float32,
++        shape=(scale_num_blocks, scale_block, scale_heads),
++        strides=(scale_block * scale_heads, scale_heads, 1),
+     )
+     # +1: the packed buffer's trailing count column.
+     indices_ptr = TritonWarmupTensor(torch.int32, shape=(num_rows, selection_width + 1))
+@@ -847,6 +923,8 @@
+             1.0,
+             1.0,
+             output_gate_ptr,
++            scale_ptr,
++            scale_ptr,
+             row_stride,
+             head_stride,
+             key_cache.stride(0),
+@@ -855,6 +933,9 @@
+             value_cache.stride(0),
+             value_cache.stride(1),
+             value_cache.stride(2),
++            scale_block * scale_heads,
++            scale_heads,
++            1,
+             selection_width + 1,
+             block_table.stride(0),
+             row_stride,
+@@ -875,6 +956,7 @@
+             BLOCK_M=block_m,
+             BLOCK_N=block_n,
+             IS_FP8=is_fp8,
++            QUANT=quant,
+             num_warps=warps,
+             num_stages=2,
+             grid=(num_rows, num_kv_heads, num_splits),

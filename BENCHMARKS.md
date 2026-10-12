@@ -45,8 +45,10 @@ blaming memory.
 | 8192 | 8 132 tok/s | 5 910 tok/s | - | -6.3 % KV |
 
 The KV column was measured at `GPU_MEMORY=0.95`. The production profile uses
-**0.90**, which gives **744 431** tokens at ctx 262 144; the change was forced by
-the free-VRAM plateau of a long-running engine (see below), not by KV arithmetic.
+**0.90**, which gives **744 431** tokens at ctx 262 144 with a BF16 KV cache and
+**1 352 663** with the INT8 cache of patch 16 (see "KV cache quantization on
+SM80"); the fraction was forced by the free-VRAM plateau of a long-running engine
+(see below), not by KV arithmetic.
 
 vLLM logs a hint that `max_num_scheduled_tokens` "should" be 2048 under
 speculative decoding; on this hardware 4096 dominates on every axis measured, so
@@ -94,6 +96,37 @@ small quota yields an empty `content` and `finish=length`).
 |---|---|
 | batch 2048, earlier profile | 567 s |
 | **batch 4096, this build, cards exclusive** | **45 507 tokens in 358 s (about 127 tok/s)**, `finish=stop`, valid HTML, zero `NVRM: Xid` before and after |
+
+## KV cache quantization on SM80 (patch 16)
+
+`sm_80` has no FP8 tensor cores, and Triton on `sm_80` has no `fp8e4nv` dtype
+either, so an FP8 KV cache has to be emulated on these cards. INT8 does not:
+int8 -> bf16 is a native widening, and a scale per (token, head) costs 16 bytes
+per token per layer (two fp32 scales for the two KV heads, about +1.6 % of the
+pool). Those scales live in their own tensors, outside the KV page, so the page
+size - and with it the hybrid block-size arithmetic - does not change.
+
+One tree, one profile (`GPU_MEMORY=0.90`, MTP=2, `MAX_BATCH_TOKENS=4096`), the
+engine started per variant, four repeats per prompt length, the first request of a
+start discarded as a JIT spike:
+
+| KV cache | pool at ctx 262 144 | prefill @2 048 / @8 192 / @32 768 | decode | start |
+|---|---|---|---|---|
+| `bfloat16` (before patch 16) | 744 431 tok (2.84x) | 5 050 / 6 920 / 8 300 tok/s | ~125 tok/s | 258-367 s |
+| `fp8_e4m3`, emulated (`fp8e4b15`) | 1 357 905 tok (5.18x) | 3 270 / 5 650 / 7 855 tok/s | ~80 tok/s (-36 %) | 310 s |
+| **`int8_per_token_head` (patch 16, shipped)** | **1 352 663 tok (5.16x)** | 4 990 / 6 750 / 8 250 tok/s | **~123 tok/s (-1.5 %)** | 243 s |
+
+The middle row is why the shipped build does not use FP8 for the KV cache. The
+memory is exactly as cheap as INT8's; what costs is the dequantization the
+emulation forces (`e4b15` -> fp32 -> bf16, and it must pass through fp32 because
+Triton maps an `fp8e4b15` cast to bf16 onto fp16, after which `tl.dot` refuses a
+bf16 x fp16 pair). With twelve fully-attentive layers and two KV heads the KV
+traffic is small next to the decode path, so that emulation is pure loss.
+
+Quality was checked with a needle-in-a-haystack probe - one secret passphrase
+buried in a ~34 000 token document, depths 0.1 / 0.5 / 0.9, greedy: **3/3** on the
+shipped INT8 cache. The end-to-end acceptance run above also completes on INT8 KV
+with `finish=stop` and zero `NVRM: Xid` before and after.
 
 ## Refusal abliteration (patch 14)
 

@@ -60,6 +60,14 @@ outside rank 0 - raise rank 0's share (for two cards, `26,22`).
 Patch 08 is missing. The PLE layer has no KV cache at all, and with PP>1 it ends
 up in the tensor list without belonging to any KV cache group.
 
+## `NotImplementedError: Qwen4Exp QSA requires a BF16 or FP8-e4m3 main KV cache`
+
+The profile asks for `KV_DTYPE=int8_per_token_head` but patch 16 is not in the
+tree: the unpatched QSA backend rejects the per-token-head dtypes (so does the
+cache-owner check, a few lines later). Apply `patches/16_kv_int8_qsa.py`, or drop
+`KV_DTYPE` from the profile to run BF16 - the pool then holds 744 431 tokens
+instead of 1 352 663 at ctx 262 144 (`BENCHMARKS.md`).
+
 ## `AssertionError` in the MTP drafter under PP
 
 Patch 09 is missing: the drafter is built on the last stage but the runner calls
@@ -110,6 +118,6 @@ package by hand, reinstall it after any `sync`.
 ## The status of this package's files is unclear
 
 `git` never sees the vLLM tree (a flat copy, no repository), so "did I change
-anything?" is answered by hashes: `manifest/files.sha256` for the fifteen patched
+anything?" is answered by hashes: `manifest/files.sha256` for the seventeen patched
 files, `manifest/tree.sha256` for the whole tree, and `verify.sh` as the one
 command that checks both plus the patch markers.

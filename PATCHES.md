@@ -5,7 +5,7 @@ Three layers, applied in this order:
 ```
 vllm-project/vllm @ a5a30471f  (0.29.1rc1.dev402+ga5a30471f)
   + base/qwen38-ple-ssd.patch        the third-party recipe (iIIusi0n, Apache-2.0)
-    + patches/01 .. 14               our changes
+    + patches/01 .. 16               our changes
       + serve/serve.sh, serve/awq-pp2.env
 ```
 
@@ -37,6 +37,7 @@ resulting end state.
 | `12b_autoround_moe_wna16_skip.py` | `layers/quantization/moe_wna16.py` | for GPTQ-style checkpoints `modules_to_not_convert` was forced empty; it now comes from `config.json`, so attention and norms are not sent to AutoGPTQ | ours |
 | `13_staged_repack_envs.py` + `13b_staged_repack_utils.py` | `envs.py`, `model_loader/utils.py` | declare `VLLM_MARLIN_REPACK_STAGED` and, between quantized modules, collect garbage and drop the allocator cache so host RAM is returned | ours - without it a 32 GiB host cannot repack a 176 GB checkpoint |
 | `14_abliteration.py` | new `nvidia/abliteration.py`, `nvidia/model.py`, `nvidia/mtp.py`, `nvidia/ple_layer.py` | runtime refusal abliteration: one refusal direction is removed from every residual writer (`o_proj`, `out_proj`, expert `down_proj`, `ple.value_proj`, the embedding row of `embed_tokens`); switch `QWEN38_ABLITERATION`. No weight file is rewritten, INT4 experts stay as in the checkpoint | ported from **DominikBucko/qwen38-flash-next-2x3090** (Apache-2.0 overlay); the direction belongs to **orcarouter/Qwen3.8-Flash-Next-Uncensored** (Arditi et al., 2024) and is *not* shipped |
+| `16_kv_int8_qsa.py` | `nvidia/qsa.py`, `nvidia/ops/qsa.py` | INT8 KV cache with a scale per (token, head) on the QSA path: the backend accepts `int8_per_token_head`/`fp8_per_token_head`, the impl keeps its own fp32 scale caches outside the KV page, the store goes through the core quantizing kernel, and the attention kernel gains a `QUANT` branch (native int8 -> bf16 widening plus per-token K/V scales). Twenty edits; without `--kv-cache-dtype int8_per_token_head` the new branch is never taken | ported from **DominikBucko/qwen38-flash-next-3090** (Apache-2.0 overlay, same checkpoint on sm_86); the storage side - the quantizing store kernel and the `INT8_PER_TOKEN_HEAD` quant mode - is upstream code of this tree |
 
 ## Launcher and profile (not scripts)
 
@@ -49,6 +50,7 @@ launcher instead, so nothing outside the tree needs patching:
 | profile selection (`serve.sh <profile.env>`, `RUN_ENV` honoured) | `serve/serve.sh` | ours, generalised from the recipe launcher |
 | export allowlist (`VLLM_PLE_CPU_OFFLOAD`, `VLLM_PLE_NONPLE_LOADER`, `QWEN38_ABLITERATION`, ...) | `serve/serve.sh` | ours; without it a profile line silently never reaches the engine |
 | optional Bearer auth (`API_KEY` -> `--api-key`) | `serve/serve.sh`, `serve/awq-pp2.env` | ours |
+| KV cache dtype (`KV_DTYPE` -> `--kv-cache-dtype`) | `serve/serve.sh`, `serve/awq-pp2.env` | ours; `int8_per_token_head` needs patch 16 |
 | the production profile (PP2, MTP2, 262 144 ctx, PLE on NVMe, port 8008) | `serve/awq-pp2.env` | ours, measured (`BENCHMARKS.md`) |
 
 ## Markers
@@ -74,6 +76,8 @@ grep -c 'MoeWNA16Config'                vllm/models/qwen4_exp/nvidia/ngram_embed
 grep -c 'modules_to_not_convert'        vllm/model_executor/layers/quantization/moe_wna16.py  # 12b
 grep -c 'VLLM_MARLIN_REPACK_STAGED'     vllm/envs.py                                        # 13
 grep -c 'abliteration.register'         vllm/models/qwen4_exp/nvidia/abliteration.py        # 14
+grep -c 'QUANT: tl.constexpr'           vllm/models/qwen4_exp/nvidia/ops/qsa.py             # 16
+grep -c 'self._pth_caches'              vllm/models/qwen4_exp/nvidia/qsa.py                 # 16
 ```
 
 ## Edits that are *not* in the build
@@ -82,12 +86,12 @@ grep -c 'abliteration.register'         vllm/models/qwen4_exp/nvidia/abliteratio
 |---|---|---|
 | `--safetensors-load-strategy=eager` | load all weights up front | measured worse: 491 s against 343 s, 63 GiB swapped on a 21 GiB host |
 | CPU offload of cold experts (`--cpu-offload-gb`) | keep experts in host RAM | not needed, the split fits both cards; the switch still exists in `serve/serve.sh` |
-| `--kv-cache-dtype fp8_e4m3` | halve KV bytes per token | not measured on this build; the switch exists but is not the default |
+| `--kv-cache-dtype fp8_e4m3` | halve KV bytes per token with one host-side scale per tensor | measured on this build and rejected: Triton on `sm_80` has no `fp8e4nv`, so the dtype has to be faked (`fp8e4b15`, value/256 with the factor folded into the host scales) and the emulation costs about 36 % of decode. The shipped profile uses `int8_per_token_head` instead (patch 16) |
 | checkpoint metadata tools (`fix_embedding_dtype.py`, `fix_index_ple_names.py`, `fix_topk_kmax.py`) | repair `config.json` or the index of a converted checkpoint | not needed for the public checkpoint this package serves (`MODEL.md`) |
 
 ## Result
 
-After `patches/apply.sh` the fifteen touched files are byte-identical to the tree
+After `patches/apply.sh` the seventeen touched files are byte-identical to the tree
 this package was built from - the hashes are in `manifest/files.sha256`, and
 `overlay/` carries the same content. `verify.sh` is the one command that checks
 it.

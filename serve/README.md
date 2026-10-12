@@ -21,8 +21,8 @@ sudo bash serve/run.sh --stop
 `serve.sh` derives from the recipe launcher of the same name (Apache-2.0,
 `github.com/iIIusi0n/qwen3.8-flash-next-cmp170hx`) and adds what the patches in
 `../patches` need: the PP flags and layer split, the MTP draft config, the
-non-PLE loader switch, the abliteration switch in the export allowlist, and an
-optional API key.
+non-PLE loader switch, the abliteration switch in the export allowlist, the KV
+cache dtype, and an optional API key.
 
 ## The banner is the truth, not the profile
 
@@ -35,6 +35,7 @@ before the `exec` and why the two lines below matter:
 ```
 === non-PLE weight loader: instanttensor (patch 06)     # not "safetensors/mmap"
 === pipeline layer split: 26,22 (PP=2)
+=== KV cache dtype: int8_per_token_head (per-token-head modes need patch 16)
 ```
 
 If a line is missing or shows the default, the value never reached the process -
@@ -50,6 +51,7 @@ sudo tr '\0' '\n' < /proc/$(cat /run/flashnext-engine.pid)/environ | grep -E 'VL
 | variable | effect |
 |---|---|
 | `GPU_MEMORY` | VRAM fraction. 0.90 in production; 0.95 is fine only when nothing else shares the card |
+| `KV_DTYPE` | KV cache quantization. `int8_per_token_head` in production (patch 16): 1 352 663 tokens instead of 744 431 at ctx 262 144, for 1.5 % of decode; empty = BF16, `fp8_e4m3` costs a third of decode on `sm_80` |
 | `MAX_BATCH_TOKENS` | 4096 here: prefill@32768 8330 vs 7522 tok/s and decode 121 vs 97 tok/s against 2048, for 0.7 % of KV |
 | `VLLM_PP_LAYER_PARTITION` | layer split between the two cards, `26,22`. The PLE layer must stay on rank 0 (patch 07 checks it) |
 | `MAX_NUM_SEQS` | concurrent sequences; raise it only together with KV (see the engine's `Maximum concurrency` line) |

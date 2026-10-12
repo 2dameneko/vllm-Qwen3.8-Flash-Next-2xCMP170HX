@@ -84,5 +84,5 @@ If the PLE dtypes are not `BF16`, either use an FP8-PLE checkpoint (with patches
 | item | size |
 |---|---|
 | weights per stage, split 26,22 | 42.49 / 42.52 GiB (the last stage also carries the MTP drafter) |
-| KV cache at ctx 262 144, `GPU_MEMORY=0.90` | 744 431 tokens (about 3.6x concurrency at full context) |
+| KV cache at ctx 262 144, `GPU_MEMORY=0.90`, INT8 KV (patch 16) | 1 352 663 tokens = 5.16x the full context (744 431 = 2.84x with a BF16 KV cache) |
 | PLE table in VRAM | 0 - it is on NVMe, only a row cache (512 MiB) is resident |
