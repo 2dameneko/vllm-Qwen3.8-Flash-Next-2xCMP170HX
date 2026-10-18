@@ -66,13 +66,32 @@ fi
 : "${CAPTURE_SIZES:=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,18,20,22,24,26,28,30,32,64,128,256,512,1024,2048]}"
 
 # --- where the PLE table lives ------------------------------------------------
-#   PLE_SSD_OFFLOAD=1 (default) - recipe path: the n-gram table is read from
-#       local NVMe with asynchronous Linux AIO and never enters VRAM.
-#       BF16 PLE only; an FP8 PLE table makes the recipe refuse to start
-#       (patches 03/04 are the reserve path for that case).
+#   PLE_SSD_OFFLOAD=auto (production profile) - recipe path plus a host-RAM
+#       row cache sized from MemAvailable at startup: >=60 GiB -> 56320,
+#       40-60 GiB -> 24576, <40 GiB -> 512 MiB. Under auto the tier always
+#       overrides PLE_SSD_CACHE_MB, so the same profile is correct on a 30 GiB
+#       and a 96 GiB host. What the row cache is and measured numbers:
+#       ../BENCHMARKS.md.
+#   PLE_SSD_OFFLOAD=1 - recipe path with the cache exactly as configured:
+#       the n-gram table is read from local NVMe with asynchronous Linux AIO
+#       and never enters VRAM. BF16 PLE only; an FP8 PLE table makes the
+#       recipe refuse to start (patches 03/04 are the reserve path for that).
 #   PLE_SSD_OFFLOAD=0 + VLLM_PLE_CPU_OFFLOAD=1 - upstream path: the table is
-#       kept in host RAM (needed for FP8-PLE checkpoints, costs a lot of RAM).
-PLE_SSD_OFFLOAD="${PLE_SSD_OFFLOAD:-1}"
+#       kept in host RAM (needed for FP8-PLE checkpoints, costs a lot of RAM;
+#       OOMs on 64 GiB cards, so auto never selects it).
+PLE_SSD_OFFLOAD="${PLE_SSD_OFFLOAD:-auto}"
+if [ "$PLE_SSD_OFFLOAD" = "auto" ]; then
+  avail_kb=$(awk '/MemAvailable/{print $2}' /proc/meminfo)
+  if [ "$avail_kb" -ge 62914560 ]; then        # >= 60 GiB
+    PLE_SSD_CACHE_MB=56320
+  elif [ "$avail_kb" -ge 41943040 ]; then      # >= 40 GiB
+    PLE_SSD_CACHE_MB=24576
+  else
+    PLE_SSD_CACHE_MB=512
+  fi
+  echo "=== PLE: auto tier from $((avail_kb / 1048576)) GiB available RAM -> cache=${PLE_SSD_CACHE_MB}MiB"
+  PLE_SSD_OFFLOAD=1
+fi
 if [ "$PLE_SSD_OFFLOAD" = "1" ]; then
   PLE_ARGS=(--additional-config "{\"ple_ssd_offload\":true,\"ple_ssd_workers\":$PLE_SSD_WORKERS,\"ple_ssd_cache_mb\":$PLE_SSD_CACHE_MB,\"ple_ssd_native_library\":\"$PLE_SSD_LIB\",\"ple_ssd_io_depth\":$PLE_SSD_IO_DEPTH,\"ple_ssd_prefetch_tokens\":$PLE_SSD_PREFETCH}")
   echo "=== PLE: offloaded to SSD (recipe path, BF16 table only)"

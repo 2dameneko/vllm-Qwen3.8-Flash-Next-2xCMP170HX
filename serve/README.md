@@ -56,6 +56,7 @@ sudo tr '\0' '\n' < /proc/$(cat /run/flashnext-engine.pid)/environ | grep -E 'VL
 | `VLLM_PP_LAYER_PARTITION` | layer split between the two cards, `26,22`. The PLE layer must stay on rank 0 (patch 07 checks it) |
 | `MAX_NUM_SEQS` | concurrent sequences; raise it only together with KV (see the engine's `Maximum concurrency` line) |
 | `VLLM_PLE_NONPLE_LOADER` | `instanttensor` (production), `safetensors` (mmap), `fastsafetensors` |
+| `PLE_SSD_OFFLOAD` | `auto` (production): SSD table + host-RAM row cache sized from `MemAvailable` (>=60 GiB -> 56320, 40-60 -> 24576, <40 -> 512 MiB; steady state then reads the PLE file zero times). `1`: cache exactly as configured. `0`: upstream CPU offload, OOMs on 64 GiB cards |
 | `MTP` | speculative tokens; `2` in production, `0` disables the draft model |
 | `QWEN38_ABLITERATION` | path or name of a refusal direction (patch 14); empty = off |
 | `API_KEY` | non-empty turns on Bearer auth on `/v1`, `/v2`, `/inference`, `/cohere` |

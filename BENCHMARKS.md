@@ -78,6 +78,34 @@ came from *not* keeping 23 GiB of page cache resident, not from raw throughput.
 During decode the PLE path keeps about 940 random 4 KiB reads per second going
 (peak 37 742 r/s, 159 MB/s, mean `r_await` 0.97 ms).
 
+## PLE row cache in host RAM (`PLE_SSD_CACHE_MB`, `PLE_SSD_OFFLOAD=auto`)
+
+The SSD iterator keeps every row it has read in a per-worker LRU dict
+(`additional_config` key `ple_ssd_cache_mb`). The rows are plain process
+memory and nothing is reserved up front: the cache fills as traffic touches
+rows. On a host with enough RAM this means steady-state inference stops
+reading the PLE file at all - only the start-up weight load touches the drive.
+
+Measured on a 91 GiB-RAM host (four repeats per point, `iostat` medians for
+the system NVMe, warm-up excluded in the steady column):
+
+| `PLE_SSD_CACHE_MB` | decode tok/s | prefill @2k/@8k/@32k | bench reads | steady reads |
+|---:|---:|---:|---:|---:|
+| 512 | 90.6–99.2 | 4541 / 6216 / 7359 | 1440 rkB/s | sustained |
+| 24576 | 107.8–117.3 | 4687–4804 / 6527–6585 / 8041–8073 | 1160 rkB/s | near zero |
+| 56320 | 109.9–115.9 | 4666–4703 / 6425–6509 / 7825–7930 | 1208 rkB/s (warm-up burst) | **0 r/s** |
+
+A cache larger than the table is not required and on this host not possible:
+the BF16 table is 95.37 GiB, while a 56320 MiB cache holds ~11.2 M of its
+20 M rows. It still goes to zero reads because only the *working set* of real
+traffic has to fit, and a 55 GiB cache holds it with wide margin. `auto`
+turns free RAM into exactly this effect: `serve.sh` reads `MemAvailable` at
+startup and picks the tier (>=60 GiB -> 56320, 40-60 -> 24576, <40 -> 512),
+always overriding `PLE_SSD_CACHE_MB`; a 30 GiB host therefore runs exactly
+the 512 MiB configuration the published numbers above were taken with.
+Mode `0` (upstream CPU offload) is never auto-selected: it allocates the
+whole table on the CUDA device and OOMs on 64 GiB cards.
+
 ## GPU memory over time (`GPU_MEMORY`, the reason for 0.90)
 
 The free-VRAM plateau of a running engine falls: a fresh start at

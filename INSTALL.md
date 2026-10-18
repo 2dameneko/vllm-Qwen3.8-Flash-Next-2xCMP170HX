@@ -117,6 +117,7 @@ Stop with `sudo bash serve/run.sh --stop`.
 | `GPU_MEMORY` | `0.90` | VRAM fraction; raise to 0.95 only if nothing else uses the card |
 | `MAX_BATCH_TOKENS` | `4096` | prefill/decode trade-off (`BENCHMARKS.md`) |
 | `VLLM_PLE_NONPLE_LOADER` | `instanttensor` | `safetensors` (mmap) if instanttensor is not installed |
+| `PLE_SSD_OFFLOAD` | `auto` | row-cache tier picked from free RAM (`serve/README.md`, `BENCHMARKS.md`); set `1` to pin `PLE_SSD_CACHE_MB` yourself |
 
 `serve.sh` takes the profile path as its first argument, and any value can be
 overridden from the environment:
