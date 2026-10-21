@@ -4,7 +4,7 @@
 #   bash verify.sh [<vllm-tree-root>]      # default: $VLLM_TREE
 #
 # Four checks, all read-only:
-#   1. the seventeen files this release changes match manifest/files.sha256
+#   1. the nineteen files this release changes match manifest/files.sha256
 #   2. those python files compile
 #   3. every patch of the set left its marker in the tree
 #   4. the tree is LF-only and has no leftovers from a fuzzed recipe patch
@@ -77,6 +77,8 @@ abliteration.register|vllm/models/qwen4_exp/nvidia/mtp.py
 abliteration.register|vllm/models/qwen4_exp/nvidia/ple_layer.py
 QUANT: tl.constexpr|vllm/models/qwen4_exp/nvidia/ops/qsa.py
 self._pth_caches|vllm/models/qwen4_exp/nvidia/qsa.py
+filter_speculative_grammar_tokens|vllm/v1/structured_output/__init__.py
+num_grammar_rejected|vllm/v1/core/sched/scheduler.py
 MARKERS
 
 echo "== 4. tree hygiene"

@@ -118,6 +118,6 @@ package by hand, reinstall it after any `sync`.
 ## The status of this package's files is unclear
 
 `git` never sees the vLLM tree (a flat copy, no repository), so "did I change
-anything?" is answered by hashes: `manifest/files.sha256` for the seventeen patched
+anything?" is answered by hashes: `manifest/files.sha256` for the nineteen patched
 files, `manifest/tree.sha256` for the whole tree, and `verify.sh` as the one
 command that checks both plus the patch markers.

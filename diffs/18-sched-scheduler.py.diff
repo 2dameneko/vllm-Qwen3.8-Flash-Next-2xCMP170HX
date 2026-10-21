@@ -1,0 +1,39 @@
+# vllm/v1/core/sched/scheduler.py
+# patches: 17
+# base: upstream @pin + base/qwen38-ple-ssd.patch (shipped state afterwards)
+--- a/vllm/v1/core/sched/scheduler.py
++++ b/vllm/v1/core/sched/scheduler.py
+@@ -2080,9 +2080,30 @@
+ 
+             # Check for stop and update request status.
+             if new_token_ids:
+-                new_token_ids, stopped = self._update_request_with_output(
+-                    request, new_token_ids, is_stale=output_is_stale
+-                )
++                # PATCH #18 (xgrammar_spec_filter): validate an accepted
++                # speculative block before it is committed. An accepted block
++                # can cross the reasoning boundary or the grammar completion
++                # and carry a trailing token the grammar rejects; the masks
++                # that sampled it saw the FSM state before the transition.
++                # Commit only the grammar-valid prefix and keep the rejected
++                # suffix schedulable (it is resampled next step with the mask
++                # now engaged) instead of terminating the request (backport of
++                # upstream vllm#52452, fixes vllm#53181 / #46118).
++                if not output_is_stale:
++                    new_token_ids, num_grammar_rejected = (
++                        self.structured_output_manager.filter_speculative_grammar_tokens(
++                            request, new_token_ids
++                        )
++                    )
++                    if num_grammar_rejected > 0:
++                        if request.num_computed_tokens > 0:
++                            request.num_computed_tokens -= num_grammar_rejected
++                        if request.num_output_placeholders > 0:
++                            request.num_output_placeholders -= num_grammar_rejected
++                if new_token_ids:
++                    new_token_ids, stopped = self._update_request_with_output(
++                        request, new_token_ids, is_stale=output_is_stale
++                    )
+             elif request.pooling_params and pooler_output is not None:
+                 # Pooling stops as soon as there is output.
+                 request.status = RequestStatus.FINISHED_STOPPED

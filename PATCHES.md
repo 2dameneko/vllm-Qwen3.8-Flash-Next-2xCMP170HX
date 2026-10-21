@@ -5,7 +5,7 @@ Three layers, applied in this order:
 ```
 vllm-project/vllm @ a5a30471f  (0.29.1rc1.dev402+ga5a30471f)
   + base/qwen38-ple-ssd.patch        the third-party recipe (iIIusi0n, Apache-2.0)
-    + patches/01 .. 16               our changes
+    + patches/01 .. 17               our changes
       + serve/serve.sh, serve/awq-pp2.env
 ```
 
@@ -38,6 +38,7 @@ resulting end state.
 | `13_staged_repack_envs.py` + `13b_staged_repack_utils.py` | `envs.py`, `model_loader/utils.py` | declare `VLLM_MARLIN_REPACK_STAGED` and, between quantized modules, collect garbage and drop the allocator cache so host RAM is returned | ours - without it a 32 GiB host cannot repack a 176 GB checkpoint |
 | `14_abliteration.py` | new `nvidia/abliteration.py`, `nvidia/model.py`, `nvidia/mtp.py`, `nvidia/ple_layer.py` | runtime refusal abliteration: one refusal direction is removed from every residual writer (`o_proj`, `out_proj`, expert `down_proj`, `ple.value_proj`, the embedding row of `embed_tokens`); switch `QWEN38_ABLITERATION`. No weight file is rewritten, INT4 experts stay as in the checkpoint | ported from **DominikBucko/qwen38-flash-next-2x3090** (Apache-2.0 overlay); the direction belongs to **orcarouter/Qwen3.8-Flash-Next-Uncensored** (Arditi et al., 2024) and is *not* shipped |
 | `16_kv_int8_qsa.py` | `nvidia/qsa.py`, `nvidia/ops/qsa.py` | INT8 KV cache with a scale per (token, head) on the QSA path: the backend accepts `int8_per_token_head`/`fp8_per_token_head`, the impl keeps its own fp32 scale caches outside the KV page, the store goes through the core quantizing kernel, and the attention kernel gains a `QUANT` branch (native int8 -> bf16 widening plus per-token K/V scales). Twenty edits; without `--kv-cache-dtype int8_per_token_head` the new branch is never taken | ported from **DominikBucko/qwen38-flash-next-3090** (Apache-2.0 overlay, same checkpoint on sm_86); the storage side - the quantizing store kernel and the `INT8_PER_TOKEN_HEAD` quant mode - is upstream code of this tree |
+| `17_xgrammar_spec_filter.py` | `v1/structured_output/__init__.py`, `v1/core/sched/scheduler.py` | grammar filter for **accepted speculative blocks** under structured output: before the scheduler commits a block, a new `filter_speculative_grammar_tokens` validates it with the non-advancing `validate_tokens` and commits only the longest grammar-valid prefix; the rejected suffix is rolled back (`num_computed_tokens` / `num_output_placeholders`) and resampled next step with the mask engaged. Kills the `[248069, 271, 90]` "grammar rejected tokens" crash (FINISHED_ERROR -> HTTP 500) when an accepted MTP block crosses the reasoning boundary or the grammar completion; terminated grammars and blocks ending on a stop token are left to the commit path | **upstream PR [#52452](https://github.com/vllm-project/vllm/pull/52452)** (ours; fixes #53181 / #46118), adapted to this tree: `_get_constraint_start` + `validate_tokens` instead of `should_advance` / `trim_reasoning_for_advance` |
 
 ## Launcher and profile (not scripts)
 
@@ -78,6 +79,8 @@ grep -c 'VLLM_MARLIN_REPACK_STAGED'     vllm/envs.py                            
 grep -c 'abliteration.register'         vllm/models/qwen4_exp/nvidia/abliteration.py        # 14
 grep -c 'QUANT: tl.constexpr'           vllm/models/qwen4_exp/nvidia/ops/qsa.py             # 16
 grep -c 'self._pth_caches'              vllm/models/qwen4_exp/nvidia/qsa.py                 # 16
+grep -c 'filter_speculative_grammar_tokens' vllm/v1/structured_output/__init__.py           # 17
+grep -c 'num_grammar_rejected'          vllm/v1/core/sched/scheduler.py                     # 17
 ```
 
 ## Edits that are *not* in the build
@@ -91,7 +94,7 @@ grep -c 'self._pth_caches'              vllm/models/qwen4_exp/nvidia/qsa.py     
 
 ## Result
 
-After `patches/apply.sh` the seventeen touched files are byte-identical to the tree
+After `patches/apply.sh` the nineteen touched files are byte-identical to the tree
 this package was built from - the hashes are in `manifest/files.sha256`, and
 `overlay/` carries the same content. `verify.sh` is the one command that checks
 it.

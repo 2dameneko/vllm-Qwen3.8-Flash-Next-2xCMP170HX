@@ -27,7 +27,7 @@ ORDER="01_ple_ssd_tp 02_ple_ssd_mixed 03_ple_ssd_fp8 04_ple_ssd_fp8_iter
 05c_pp_filter_ep 05d_pp_filter_weights 07_pp2_ple_config 07b_pp2_ple_state
 08_kv_diag 09_mtp_pp 10_ngram_compressed_tensors 11_ngram_skip_scale
 12_autoround_moe_wna16 12b_autoround_moe_wna16_skip 13_staged_repack_envs
-13b_staged_repack_utils 14_abliteration 16_kv_int8_qsa"
+13b_staged_repack_utils 14_abliteration 16_kv_int8_qsa 17_xgrammar_spec_filter"
 
 failed=""
 for tag in $ORDER; do

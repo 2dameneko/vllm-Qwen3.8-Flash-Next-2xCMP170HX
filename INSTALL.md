@@ -1,7 +1,7 @@
 # INSTALL.md - build from upstream to a running engine
 
 Everything below is one pass on a fresh machine. The result is a vLLM tree whose
-seventeen patched files match `manifest/files.sha256` byte for byte, served by
+nineteen patched files match `manifest/files.sha256` byte for byte, served by
 `serve/serve.sh`.
 
 ## 0. Prerequisites
@@ -64,8 +64,8 @@ bash patches/apply.sh /srv/llm/src/vllm-a5a30471ff2bb7f0824f2da10e358af98d304472
 # ... or, identical result and no scripts: cp -r overlay/. <tree>/
 ```
 
-Each script prints one line per file (`patched`, `already`, `ANCHOR?`). Twenty-one
-scripts, 72 edits, seventeen files. If a script reports `ANCHOR?`, the tree is not
+Each script prints one line per file (`patched`, `already`, `ANCHOR?`). Twenty-two
+scripts, 74 edits, nineteen files. If a script reports `ANCHOR?`, the tree is not
 the pinned revision or is not clean - do not "fix" it by hand, compare against
 `overlay/` instead.
 
@@ -76,7 +76,7 @@ cd /path/to/release
 bash verify.sh /srv/llm/src/vllm-a5a30471ff2bb7f0824f2da10e358af98d304472
 ```
 
-`verify.sh` checks the seventeen files against `manifest/files.sha256`, compiles
+`verify.sh` checks the nineteen files against `manifest/files.sha256`, compiles
 the patched python files, looks for leftovers from other tools
 (`*.orig`, `*.rej`, i.e. a recipe patch that did not apply cleanly) and greps for
 the marker of every patch in the set - for example `VLLM_PLE_NONPLE_LOADER` in

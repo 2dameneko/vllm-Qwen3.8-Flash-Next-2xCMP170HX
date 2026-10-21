@@ -1,6 +1,6 @@
 # patches/ - what this directory changes
 
-Twenty-one scripts, applied in the order listed by `apply.sh`. Each one is a small
+Twenty-two scripts, applied in the order listed by `apply.sh`. Each one is a small
 idempotent text edit: `install | check | remove`, a `<file>.bak-<patch>` copy
 next to every file it touches, and an exact anchor - if the anchor is missing the
 script says so and changes nothing. Nothing here compiles, downloads or runs
@@ -50,12 +50,12 @@ came from) and `../diffs/` for the resulting change as a unified diff.
 
 ## Result
 
-After `apply.sh` the seventeen files it touches are byte-identical to the tree this
+After `apply.sh` the nineteen files it touches are byte-identical to the tree this
 package was built from:
 
 ```bash
 # from the release root, on the tree you just patched
-sha256sum -c manifest/files.sha256      # 17 files, all OK
+sha256sum -c manifest/files.sha256      # 19 files, all OK
 ```
 
 The same result without running the scripts: unpack `overlay/` over the tree.

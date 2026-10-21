@@ -26,11 +26,11 @@ listed in [`PATCHES.md`](PATCHES.md).
 | `BENCHMARKS.md` | the measurements this configuration is justified by, and how they were taken |
 | `TROUBLESHOOTING.md` | the failures we actually hit and what they look like from the outside |
 | `base/` | the build base: the recipe patch `qwen38-ple-ssd.patch` (third-party, Apache-2.0), its licence and README, the tested version pins |
-| `patches/` | twenty-one idempotent `install / check / remove` scripts (one logical change per file group) |
+| `patches/` | twenty-two idempotent `install / check / remove` scripts (one logical change per file group) |
 | `diffs/` | the same changes as unified diffs against a clean base, one file each |
-| `overlay/` | the resulting seventeen files, paths 1:1 from the vLLM tree root (an alternative to running the patches) |
+| `overlay/` | the resulting nineteen files, paths 1:1 from the vLLM tree root (an alternative to running the patches) |
 | `serve/` | the English launcher derived from the recipe's `serve.sh`, the production profile, and a background runner |
-| `manifest/` | `files.sha256` (the seventeen changed files), `tree.sha256` (every file of the built tree) and `pip-freeze.txt` |
+| `manifest/` | `files.sha256` (the nineteen changed files), `tree.sha256` (every file of the built tree) and `pip-freeze.txt` |
 | `verify.sh` | one command that checks a tree against `manifest/` |
 
 ## Quick start
@@ -45,7 +45,7 @@ patch -p1 < ../base/qwen38-ple-ssd.patch
 bash scripts/install-runtime.sh          # ships with the recipe, see base/README-recipe.md
 # 3. our patches, in order
 bash ../patches/apply.sh "$PWD"
-# 4. verify: seventeen files must match byte for byte
+# 4. verify: nineteen files must match byte for byte
 sha256sum -c ../manifest/files.sha256
 # 5. serve
 sudo bash ../serve/run.sh ../serve/awq-pp2.env
